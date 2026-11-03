@@ -45,4 +45,6 @@ O projeto reserva aproximadamente 3 GB em limites somados, além do overhead de 
 
 ## Evolução
 
+O lock usa um override de `minimatch` para a versão corrigida 11.x, compatível com o Node 24 utilizado. A dependência é transitiva das ferramentas de lint; a atualização foi validada com ESLint e TypeScript. O motivo é o [advisory GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). Remover o override quando as dependências diretas adotarem a correção, repetindo lint e auditoria. Não foi usado `npm audit fix --force` nem downgrade automático das ferramentas.
+
 Testes de carga com dataset/hardware identificados, métricas Prometheus/tracing, filtros server-side de reviews, catálogo editável com auditoria/OIDC, sincronização via outbox e análise IA persistida são próximos incrementos. Nenhum benchmark ou SLA é declarado sem medição. Este projeto não é uma implementação de serviços internos de terceiros.
