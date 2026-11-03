@@ -1,0 +1,126 @@
+name: aurora-pdp
+x-runtime: &runtime
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+services:
+  catalog-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: catalog
+      POSTGRES_USER: catalog
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:?Run setup first}
+    volumes: ["catalog-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+  ratings-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ratings
+      POSTGRES_USER: ratings
+      POSTGRES_PASSWORD: ${RATINGS_DB_PASSWORD:?Run setup first}
+    volumes: ["ratings-demo-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ratings -d ratings"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+  catalog-cache:
+    image: redis:7.4-alpine
+    command:
+      [
+        redis-server,
+        --maxmemory,
+        64mb,
+        --maxmemory-policy,
+        allkeys-lru,
+        --save,
+        "",
+        --appendonly,
+        "no",
+      ]
+    mem_limit: 96m
+  ratings-cache:
+    image: redis:7.4-alpine
+    command:
+      [
+        redis-server,
+        --maxmemory,
+        64mb,
+        --maxmemory-policy,
+        allkeys-lru,
+        --save,
+        "",
+        --appendonly,
+        "no",
+      ]
+    mem_limit: 96m
+  catalog:
+    <<: *runtime
+    build: ../product-omnichannel-api
+    environment:
+      DB_URL: jdbc:postgresql://catalog-db:5432/catalog
+      DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      REDIS_HOST: catalog-cache
+    ports: ["127.0.0.1:8081:8080"]
+    depends_on:
+      catalog-db: { condition: service_healthy }
+    mem_limit: 640m
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+  ratings:
+    <<: *runtime
+    build: ${RATINGS_SOURCE:-../ratings-reviews-api}
+    environment:
+      DB_URL: jdbc:postgresql://ratings-db:5432/ratings
+      DB_PASSWORD: ${RATINGS_DB_PASSWORD}
+      REDIS_HOST: ratings-cache
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup first}
+      REVIEWER_PASSWORD: ${REVIEWER_PASSWORD:?Run setup first}
+      SPRING_PROFILES_ACTIVE: demo
+      AI_ENABLED: false
+    ports: ["127.0.0.1:8082:8080"]
+    depends_on:
+      ratings-db: { condition: service_healthy }
+    mem_limit: 640m
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+  pdp:
+    <<: *runtime
+    build:
+      context: .
+      args: { APP: pdp }
+    environment:
+      CATALOG_URL: http://catalog:8080
+      RATINGS_URL: http://ratings:8080
+    depends_on:
+      catalog: { condition: service_healthy }
+      ratings: { condition: service_healthy }
+    ports: ["127.0.0.1:3002:3000"]
+    mem_limit: 384m
+    read_only: true
+    tmpfs: ["/tmp:size=32m"]
+  shell:
+    <<: *runtime
+    build:
+      context: .
+      args: { APP: shell }
+    mem_limit: 256m
+    read_only: true
+    tmpfs: ["/tmp:size=32m"]
+  gateway:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    ports: ["127.0.0.1:3000:8080"]
+    volumes: ["./gateway/default.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on:
+      pdp: { condition: service_healthy }
+      shell: { condition: service_healthy }
+    mem_limit: 64m
+volumes:
+  catalog-data:
+  ratings-demo-data:

@@ -1,0 +1,10 @@
+{
+  "ratings-reviews-api": {
+    "url": "https://github.com/JeffeMartins/ratings-reviews-api.git",
+    "ref": "a476ddda038d9488ae9387591caa93264b2763ab"
+  },
+  "product-omnichannel-api": {
+    "url": "https://github.com/JeffeMartins/product-omnichannel-api.git",
+    "ref": "932bef995d05de68231881dab2b1cc2609884ecf"
+  }
+}
